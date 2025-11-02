@@ -3,34 +3,75 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Upstox Trading System</title>
+    <title>Upstox Enhanced Trading System</title>
     <link href="/static/css/output.css" rel="stylesheet">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        .signal-meter {
+            background: linear-gradient(90deg, #ef4444 0%, #eab308 50%, #22c55e 100%);
+            height: 8px;
+            border-radius: 4px;
+            position: relative;
+        }
+        .signal-marker {
+            position: absolute;
+            width: 4px;
+            height: 16px;
+            background: white;
+            top: -4px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+            border-radius: 2px;
+        }
+        .pulse {
+            animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: .5; }
+        }
+        .glow-green {
+            box-shadow: 0 0 20px rgba(34, 197, 94, 0.5);
+        }
+        .glow-red {
+            box-shadow: 0 0 20px rgba(239, 68, 68, 0.5);
+        }
+    </style>
 </head>
 <body class="min-h-screen text-white">
     <div class="container mx-auto px-6 py-8">
         
+        <!-- Header -->
         <div class="flex justify-between items-center mb-8">
             <div>
                 <h1 class="text-5xl font-bold mb-2 bg-gradient-to-r from-blue-400 to-purple-500 bg-clip-text text-transparent">
                     🎯 Upstox Trading System
                 </h1>
-                <p class="text-gray-400">Flask 3.1.2 • Tailwind 4.1 • WebSockets 15.0.1</p>
+                <p class="text-gray-400">Enhanced UI • Real-time Signals • Options Ready</p>
             </div>
             
             <div class="flex gap-4">
-                <button id="startBtn" onclick="startTrading()" 
-                    class="px-6 py-3 bg-green-600 hover:bg-green-700 rounded-lg font-semibold transition-all">
-                    ▶️ Start Trading
+                <button id="startFuturesBtn" onclick="startFuturesTrading()" 
+                    class="px-6 py-3 bg-blue-600 hover:bg-blue-700 rounded-lg font-semibold transition-all">
+                    📈 Futures
+                </button>
+                <button id="startOptionsBtn" onclick="startOptionsTrading()" 
+                    class="px-6 py-3 bg-purple-600 hover:bg-purple-700 rounded-lg font-semibold transition-all">
+                    📊 Options
                 </button>
                 <button id="stopBtn" onclick="stopTrading()" 
                     class="px-6 py-3 bg-red-600 hover:bg-red-700 rounded-lg font-semibold transition-all hidden">
-                    ⏸️ Stop Trading
+                    ⏸️ Stop
                 </button>
             </div>
         </div>
 
-        <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+        <!-- Stats Cards -->
+        <div class="grid grid-cols-1 md:grid-cols-5 gap-6 mb-8">
+            <div class="rounded-lg border border-white/10 bg-white/5 backdrop-blur-lg p-6">
+                <h3 class="text-sm text-gray-300 mb-2">Engine</h3>
+                <p id="engineType" class="text-2xl font-bold text-yellow-400">STOPPED</p>
+            </div>
+            
             <div class="rounded-lg border border-white/10 bg-white/5 backdrop-blur-lg p-6">
                 <h3 class="text-sm text-gray-300 mb-2">Total P&L</h3>
                 <p id="totalPnL" class="text-3xl font-bold text-green-400">0.00%</p>
@@ -42,47 +83,138 @@
             </div>
             
             <div class="rounded-lg border border-white/10 bg-white/5 backdrop-blur-lg p-6">
-                <h3 class="text-sm text-gray-300 mb-2">Total Trades</h3>
+                <h3 class="text-sm text-gray-300 mb-2">Trades</h3>
                 <p id="totalTrades" class="text-3xl font-bold text-purple-400">0</p>
             </div>
             
             <div class="rounded-lg border border-white/10 bg-white/5 backdrop-blur-lg p-6">
-                <h3 class="text-sm text-gray-300 mb-2">Status</h3>
-                <p id="systemStatus" class="text-3xl font-bold text-yellow-400">STOPPED</p>
+                <h3 class="text-sm text-gray-300 mb-2">Signal Score</h3>
+                <p id="signalScore" class="text-3xl font-bold text-yellow-400">0</p>
             </div>
         </div>
 
-        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+        <!-- Signal Strength Meter -->
+        <div class="rounded-lg border border-white/10 bg-white/5 backdrop-blur-lg p-6 mb-8">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-2xl font-bold">📊 Live Signal Strength</h2>
+                <div class="flex gap-4 text-sm">
+                    <span class="text-red-400">◀ SELL (-100)</span>
+                    <span class="text-gray-400">NEUTRAL (0)</span>
+                    <span class="text-green-400">BUY (+100) ▶</span>
+                </div>
+            </div>
+            
+            <div class="signal-meter mb-4">
+                <div id="signalMarker" class="signal-marker" style="left: 50%;"></div>
+            </div>
+            
+            <div class="grid grid-cols-3 gap-4 text-center text-sm">
+                <div>
+                    <p class="text-gray-400 mb-1">Score</p>
+                    <p id="meterScore" class="text-xl font-bold">0</p>
+                </div>
+                <div>
+                    <p class="text-gray-400 mb-1">Confidence</p>
+                    <p id="meterConfidence" class="text-xl font-bold">0%</p>
+                </div>
+                <div>
+                    <p class="text-gray-400 mb-1">Action</p>
+                    <p id="meterAction" class="text-xl font-bold">WAIT</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Main Content Grid -->
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+            
+            <!-- Live Market Data -->
             <div class="rounded-lg border border-white/10 bg-white/5 backdrop-blur-lg p-6">
-                <h2 class="text-2xl font-bold mb-4">📊 Live Market Data</h2>
+                <h2 class="text-2xl font-bold mb-4">📊 Live Data</h2>
                 <div class="space-y-3">
                     <div class="flex justify-between p-3 rounded-lg bg-white/5">
                         <span class="text-gray-400">LTP:</span>
-                        <span id="ltp" class="font-semibold">-</span>
+                        <span id="ltp" class="font-semibold text-lg">-</span>
                     </div>
                     <div class="flex justify-between p-3 rounded-lg bg-white/5">
-                        <span class="text-gray-400">VWAP:</span>
-                        <span id="vwap" class="font-semibold">-</span>
-                    </div>
-                    <div class="flex justify-between p-3 rounded-lg bg-white/5">
-                        <span class="text-gray-400">Order Book Pressure:</span>
-                        <span id="pressure" class="font-semibold">-</span>
+                        <span class="text-gray-400">Delta:</span>
+                        <span id="delta" class="font-semibold text-lg">-</span>
                     </div>
                     <div class="flex justify-between p-3 rounded-lg bg-white/5">
                         <span class="text-gray-400">Gamma:</span>
-                        <span id="gamma" class="font-semibold">-</span>
+                        <span id="gamma" class="font-semibold text-lg">-</span>
+                    </div>
+                    <div class="flex justify-between p-3 rounded-lg bg-white/5">
+                        <span class="text-gray-400">IV:</span>
+                        <span id="iv" class="font-semibold text-lg">-</span>
+                    </div>
+                    <div class="flex justify-between p-3 rounded-lg bg-white/5">
+                        <span class="text-gray-400">Pressure:</span>
+                        <span id="pressure" class="font-semibold text-lg">-</span>
                     </div>
                 </div>
             </div>
 
+            <!-- Order Book Analysis -->
             <div class="rounded-lg border border-white/10 bg-white/5 backdrop-blur-lg p-6">
-                <h2 class="text-2xl font-bold mb-4">🎯 Current Position</h2>
-                <div id="currentPosition">
-                    <p class="text-gray-400 text-center py-12">No active position</p>
+                <h2 class="text-2xl font-bold mb-4">📚 Order Book (30 Levels)</h2>
+                <div class="space-y-4">
+                    <div>
+                        <div class="flex justify-between text-sm mb-2">
+                            <span class="text-gray-400">Top 5 (Retail)</span>
+                            <span id="top5Imb" class="font-semibold">-</span>
+                        </div>
+                        <div class="w-full bg-gray-700 rounded-full h-2">
+                            <div id="top5Bar" class="bg-gradient-to-r from-red-500 to-green-500 h-2 rounded-full" style="width: 50%"></div>
+                        </div>
+                    </div>
+                    
+                    <div>
+                        <div class="flex justify-between text-sm mb-2">
+                            <span class="text-gray-400">Mid 10 (Algo)</span>
+                            <span id="mid10Imb" class="font-semibold">-</span>
+                        </div>
+                        <div class="w-full bg-gray-700 rounded-full h-2">
+                            <div id="mid10Bar" class="bg-gradient-to-r from-red-500 to-green-500 h-2 rounded-full" style="width: 50%"></div>
+                        </div>
+                    </div>
+                    
+                    <div>
+                        <div class="flex justify-between text-sm mb-2">
+                            <span class="text-gray-400">Deep 15 (Institutions) ⭐</span>
+                            <span id="deep15Imb" class="font-semibold">-</span>
+                        </div>
+                        <div class="w-full bg-gray-700 rounded-full h-3">
+                            <div id="deep15Bar" class="bg-gradient-to-r from-red-500 to-green-500 h-3 rounded-full" style="width: 50%"></div>
+                        </div>
+                    </div>
+                    
+                    <div class="pt-4 border-t border-white/10">
+                        <div class="flex justify-between">
+                            <span class="text-gray-400">Spread:</span>
+                            <span id="spread" class="font-semibold">-</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Signal Reasons -->
+            <div class="rounded-lg border border-white/10 bg-white/5 backdrop-blur-lg p-6">
+                <h2 class="text-2xl font-bold mb-4">🎯 Signal Analysis</h2>
+                <div id="signalReasons" class="space-y-2 text-sm">
+                    <p class="text-gray-400 text-center py-8">Waiting for signals...</p>
                 </div>
             </div>
         </div>
 
+        <!-- Current Position -->
+        <div class="rounded-lg border border-white/10 bg-white/5 backdrop-blur-lg p-6 mb-8">
+            <h2 class="text-2xl font-bold mb-4">💼 Current Position</h2>
+            <div id="currentPosition">
+                <p class="text-gray-400 text-center py-12">No active position</p>
+            </div>
+        </div>
+
+        <!-- Trade History -->
         <div class="rounded-lg border border-white/10 bg-white/5 backdrop-blur-lg p-6">
             <h2 class="text-2xl font-bold mb-4">📋 Trade History</h2>
             <div class="overflow-x-auto">
@@ -93,13 +225,15 @@
                             <th class="text-left py-3 px-4 text-gray-300">Type</th>
                             <th class="text-left py-3 px-4 text-gray-300">Entry</th>
                             <th class="text-left py-3 px-4 text-gray-300">Exit</th>
+                            <th class="text-left py-3 px-4 text-gray-300">SL</th>
+                            <th class="text-left py-3 px-4 text-gray-300">Target</th>
                             <th class="text-left py-3 px-4 text-gray-300">P&L</th>
                             <th class="text-left py-3 px-4 text-gray-300">Reason</th>
                         </tr>
                     </thead>
                     <tbody id="tradeHistory">
                         <tr>
-                            <td colspan="6" class="text-center py-12 text-gray-400">
+                            <td colspan="8" class="text-center py-12 text-gray-400">
                                 No trades yet
                             </td>
                         </tr>
@@ -109,6 +243,282 @@
         </div>
     </div>
 
-    <script src="/static/js/app.js"></script>
+    <script>
+        let eventSource = null;
+        let currentEngine = null;
+
+        function startFuturesTrading() {
+            fetch('/api/start-trading', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ instruments: ['NSE_FO|61755'] })
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    currentEngine = 'futures';
+                    updateButtons();
+                    document.getElementById('engineType').textContent = 'FUTURES';
+                    document.getElementById('engineType').className = 'text-2xl font-bold text-blue-400 pulse';
+                    connectSSE();
+                }
+            });
+        }
+
+        function startOptionsTrading() {
+            fetch('/api/start-options-trading', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ instruments: ['NSE_FO|NIFTY2550619900CE'] })
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    currentEngine = 'options';
+                    updateButtons();
+                    document.getElementById('engineType').textContent = 'OPTIONS';
+                    document.getElementById('engineType').className = 'text-2xl font-bold text-purple-400 pulse';
+                    connectSSE();
+                }
+            });
+        }
+
+        function stopTrading() {
+            fetch('/api/stop-trading', { method: 'POST' })
+            .then(res => res.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    currentEngine = null;
+                    updateButtons();
+                    document.getElementById('engineType').textContent = 'STOPPED';
+                    document.getElementById('engineType').className = 'text-2xl font-bold text-gray-400';
+                    
+                    if (eventSource) {
+                        eventSource.close();
+                        eventSource = null;
+                    }
+                }
+            });
+        }
+
+        function updateButtons() {
+            const futuresBtn = document.getElementById('startFuturesBtn');
+            const optionsBtn = document.getElementById('startOptionsBtn');
+            const stopBtn = document.getElementById('stopBtn');
+            
+            if (currentEngine) {
+                futuresBtn.classList.add('hidden');
+                optionsBtn.classList.add('hidden');
+                stopBtn.classList.remove('hidden');
+            } else {
+                futuresBtn.classList.remove('hidden');
+                optionsBtn.classList.remove('hidden');
+                stopBtn.classList.add('hidden');
+            }
+        }
+
+        function connectSSE() {
+            eventSource = new EventSource('/stream');
+            
+            eventSource.onmessage = function(event) {
+                const data = JSON.parse(event.data);
+                
+                if (data.type === 'market_data') {
+                    updateLiveData(data.data);
+                } else if (data.type === 'trade') {
+                    handleNewTrade(data.data);
+                } else if (data.type === 'position_update') {
+                    updatePosition(data.data);
+                }
+            };
+            
+            loadStats();
+            loadTrades();
+            loadSignalDetails();
+            
+            // Refresh signal details every 2 seconds
+            setInterval(loadSignalDetails, 2000);
+        }
+
+        function updateLiveData(data) {
+            document.getElementById('ltp').textContent = '₹' + data.ltp.toFixed(2);
+            
+            if (data.vwap) {
+                document.getElementById('vwap').textContent = '₹' + data.vwap.toFixed(2);
+            }
+            
+            const pressure = document.getElementById('pressure');
+            pressure.textContent = data.pressure.toFixed(1);
+            pressure.className = data.pressure > 0 ? 
+                'font-semibold text-lg text-green-400' : 'font-semibold text-lg text-red-400';
+            
+            document.getElementById('delta').textContent = data.delta ? data.delta.toFixed(4) : '-';
+            document.getElementById('gamma').textContent = data.gamma ? data.gamma.toFixed(4) : '-';
+            document.getElementById('iv').textContent = data.iv ? (data.iv * 100).toFixed(2) + '%' : '-';
+        }
+
+        function loadSignalDetails() {
+            if (!currentEngine) return;
+            
+            fetch('/api/signal-details')
+            .then(res => res.json())
+            .then(data => {
+                if (!data.score) return;
+                
+                // Update signal score
+                document.getElementById('signalScore').textContent = data.score.toFixed(0);
+                document.getElementById('meterScore').textContent = data.score.toFixed(0);
+                document.getElementById('meterConfidence').textContent = data.confidence.toFixed(0) + '%';
+                document.getElementById('meterAction').textContent = data.action;
+                
+                // Update signal meter
+                const marker = document.getElementById('signalMarker');
+                const position = ((data.score + 100) / 200) * 100; // Convert -100 to +100 to 0% to 100%
+                marker.style.left = position + '%';
+                
+                // Update order book bars
+                if (data.order_book) {
+                    updateOrderBookBar('top5', data.order_book.top5_imb);
+                    updateOrderBookBar('mid10', data.order_book.mid10_imb);
+                    updateOrderBookBar('deep15', data.order_book.deep15_imb);
+                    
+                    document.getElementById('spread').textContent = 
+                        data.order_book.spread_percent.toFixed(2) + '%';
+                }
+                
+                // Update signal reasons
+                if (data.reasons && data.reasons.length > 0) {
+                    const reasonsDiv = document.getElementById('signalReasons');
+                    reasonsDiv.innerHTML = data.reasons.map(reason => {
+                        const isPositive = reason.includes('✅');
+                        const color = isPositive ? 'text-green-400' : 'text-yellow-400';
+                        return `<div class="p-2 rounded bg-white/5 ${color}">${reason}</div>`;
+                    }).join('');
+                }
+            });
+        }
+
+        function updateOrderBookBar(level, imbalance) {
+            const bar = document.getElementById(level + 'Bar');
+            const label = document.getElementById(level + 'Imb');
+            
+            const position = ((imbalance + 1) / 2) * 100; // Convert -1 to +1 to 0% to 100%
+            bar.style.width = position + '%';
+            
+            label.textContent = (imbalance >= 0 ? '+' : '') + imbalance.toFixed(3);
+            label.className = imbalance > 0 ? 'font-semibold text-green-400' : 
+                             imbalance < 0 ? 'font-semibold text-red-400' : 'font-semibold';
+        }
+
+        function handleNewTrade(trade) {
+            loadStats();
+            loadTrades();
+            
+            const engineType = trade.engine_type || 'trade';
+            alert(`New ${trade.type} ${engineType} at ₹${trade.entry.toFixed(2)}`);
+        }
+
+        function updatePosition(position) {
+            const div = document.getElementById('currentPosition');
+            const isLong = position.type === 'LONG' || position.option_type === 'CE';
+            const typeText = position.option_type ? 
+                `${position.option_type} (${position.type})` : position.type;
+            
+            div.innerHTML = `
+                <div class="grid grid-cols-2 lg:grid-cols-4 gap-6">
+                    <div class="p-4 rounded-lg ${isLong ? 'bg-green-900/30 glow-green' : 'bg-red-900/30 glow-red'}">
+                        <p class="text-sm text-gray-400 mb-1">Type</p>
+                        <p class="text-2xl font-bold ${isLong ? 'text-green-400' : 'text-red-400'}">
+                            ${typeText}
+                        </p>
+                    </div>
+                    
+                    <div class="p-4 rounded-lg bg-white/5">
+                        <p class="text-sm text-gray-400 mb-1">Entry</p>
+                        <p class="text-2xl font-bold">₹${position.entry.toFixed(2)}</p>
+                    </div>
+                    
+                    <div class="p-4 rounded-lg bg-white/5">
+                        <p class="text-sm text-gray-400 mb-1">Stop Loss</p>
+                        <p class="text-2xl font-bold text-red-400">₹${position.stopLoss.toFixed(2)}</p>
+                    </div>
+                    
+                    <div class="p-4 rounded-lg bg-white/5">
+                        <p class="text-sm text-gray-400 mb-1">Target</p>
+                        <p class="text-2xl font-bold text-green-400">₹${position.target.toFixed(2)}</p>
+                    </div>
+                </div>
+                
+                ${position.delta ? `
+                <div class="mt-4 grid grid-cols-4 gap-4 text-center">
+                    <div>
+                        <p class="text-xs text-gray-400">Delta</p>
+                        <p class="font-semibold">${position.delta.toFixed(3)}</p>
+                    </div>
+                    <div>
+                        <p class="text-xs text-gray-400">Gamma</p>
+                        <p class="font-semibold">${position.gamma.toFixed(4)}</p>
+                    </div>
+                    <div>
+                        <p class="text-xs text-gray-400">IV</p>
+                        <p class="font-semibold">${(position.iv * 100).toFixed(1)}%</p>
+                    </div>
+                    <div>
+                        <p class="text-xs text-gray-400">Confidence</p>
+                        <p class="font-semibold">${position.confidence}%</p>
+                    </div>
+                </div>
+                ` : ''}
+            `;
+        }
+
+        function loadStats() {
+            fetch('/api/stats')
+            .then(res => res.json())
+            .then(data => {
+                const pnlEl = document.getElementById('totalPnL');
+                pnlEl.textContent = data.total_pnl.toFixed(2) + '%';
+                pnlEl.className = 'text-3xl font-bold ' + 
+                    (data.total_pnl >= 0 ? 'text-green-400' : 'text-red-400');
+                
+                document.getElementById('winRate').textContent = data.win_rate.toFixed(1) + '%';
+                document.getElementById('totalTrades').textContent = data.total_trades;
+            });
+        }
+
+        function loadTrades() {
+            fetch('/api/trades?limit=10')
+            .then(res => res.json())
+            .then(trades => {
+                const tbody = document.getElementById('tradeHistory');
+                
+                if (trades.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="8" class="text-center py-12 text-gray-400">No trades yet</td></tr>';
+                    return;
+                }
+                
+                tbody.innerHTML = trades.map(trade => `
+                    <tr class="border-b border-white/10 hover:bg-white/5">
+                        <td class="py-3 px-4 text-sm">${new Date(trade.entry_time).toLocaleTimeString()}</td>
+                        <td class="py-3 px-4">
+                            <span class="px-2 py-1 rounded text-sm ${trade.trade_type === 'LONG' ? 'bg-green-600' : 'bg-red-600'}">
+                                ${trade.trade_type}
+                            </span>
+                        </td>
+                        <td class="py-3 px-4 font-semibold">₹${trade.entry_price.toFixed(2)}</td>
+                        <td class="py-3 px-4">${trade.exit_price ? '₹' + trade.exit_price.toFixed(2) : '-'}</td>
+                        <td class="py-3 px-4 text-red-400 text-sm">₹${trade.stop_loss.toFixed(2)}</td>
+                        <td class="py-3 px-4 text-green-400 text-sm">₹${trade.target.toFixed(2)}</td>
+                        <td class="py-3 px-4">
+                            <span class="${trade.pnl_percent >= 0 ? 'text-green-400' : 'text-red-400'} font-semibold">
+                                ${trade.pnl_percent ? (trade.pnl_percent >= 0 ? '+' : '') + trade.pnl_percent.toFixed(2) + '%' : '-'}
+                            </span>
+                        </td>
+                        <td class="py-3 px-4 text-sm text-gray-400">${trade.exit_reason || '-'}</td>
+                    </tr>
+                `).join('');
+            });
+        }
+    </script>
 </body>
 </html>

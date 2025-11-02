@@ -1,20 +1,8 @@
-# ===================================================================
-# trading_engine_options.py - Nifty Options Buying Strategy
-# Focus: CE/PE buying only, No selling/writing
-# ===================================================================
-
 from datetime import datetime, time as dt_time
-import math
 
 
 class NiftyOptionsTradingEngine:
-    """
-    Nifty Options Buying Strategy
-    - Only BUY CE (Calls) or BUY PE (Puts)
-    - No option writing/selling
-    - Focus on ATM/OTM options
-    - Greeks-based entry/exit
-    """
+    """Nifty Options Buying Strategy - FIXED VERSION"""
     
     def __init__(self, database):
         self.db = database
@@ -24,13 +12,12 @@ class NiftyOptionsTradingEngine:
         self.max_ticks = 10000
         self.max_bars = 500
         
-        # Options specific settings
-        self.max_loss_per_trade = 0.5  # 50% loss = exit
-        self.target_profit = 1.0  # 100% profit = exit
-        self.min_days_to_expiry = 2  # Don't trade if < 2 days to expiry
+        self.max_loss_per_trade = 0.5
+        self.target_profit = 1.0
+        self.min_days_to_expiry = 2
     
     def extract_order_book(self, bid_ask_quote):
-        """30-level order book analysis."""
+        """30-level order book with FIXED calc_imb"""
         if not bid_ask_quote:
             return {
                 'pressure_score': 0,
@@ -63,16 +50,16 @@ class NiftyOptionsTradingEngine:
                 deep15_bid += bid_q
                 deep15_ask += ask_q
         
-        # Weight distribution - DEEP LEVELS MATTER!
-        # Top 5: Retail traders (30% weight)
-        # Mid 10: Small institutions (30% weight)  
-        # Deep 15: BIG INSTITUTIONS (40% weight) ← MOST IMPORTANT!
+        # FIXED: Define calc_imb function properly
+        def calc_imb(bid, ask):
+            total = bid + ask
+            return (bid - ask) / total if total > 0 else 0
         
         top5_imb = calc_imb(top5_bid, top5_ask)
         mid10_imb = calc_imb(mid10_bid, mid10_ask)
         deep15_imb = calc_imb(deep15_bid, deep15_ask)
         
-        # CORRECTED: Deep levels get HIGHEST weight (institutional orders)
+        # CORRECTED: Deep levels get HIGHEST weight (40%)
         pressure_score = (top5_imb * 30) + (mid10_imb * 30) + (deep15_imb * 40)
         
         best_bid = bid_ask_quote[0].get('bidP', 0)
@@ -86,11 +73,15 @@ class NiftyOptionsTradingEngine:
             'total_ask_qty': total_ask,
             'best_bid': best_bid,
             'best_ask': best_ask,
-            'spread_percent': spread_percent
+            'spread_percent': spread_percent,
+            # Additional details for UI
+            'top5_imb': top5_imb,
+            'mid10_imb': mid10_imb,
+            'deep15_imb': deep15_imb
         }
     
     def process_tick(self, feed_data):
-        """Process incoming tick with options data."""
+        """Process tick with full options data"""
         try:
             feeds = feed_data.get('feeds', {})
             
@@ -107,29 +98,20 @@ class NiftyOptionsTradingEngine:
                     'ltp': float(ltpc.get('ltp', 0)),
                     'ltq': int(ltpc.get('ltq', 0)),
                     'order_book': self.extract_order_book(market_level.get('bidAskQuote', [])),
-                    
-                    # Options Greeks (Critical for options!)
                     'delta': float(greeks.get('delta', 0)),
                     'gamma': float(greeks.get('gamma', 0)),
                     'theta': float(greeks.get('theta', 0)),
                     'vega': float(greeks.get('vega', 0)),
                     'rho': float(greeks.get('rho', 0)),
-                    
-                    # Options specific
                     'oi': int(full_feed.get('oi', 0)),
                     'iv': float(full_feed.get('iv', 0)),
                     'vtt': int(full_feed.get('vtt', 0)),
-                    
-                    # OHLC data
                     'ohlc_1d': ohlc[0] if len(ohlc) > 0 else {},
                     'ohlc_1m': ohlc[1] if len(ohlc) > 1 else {},
-                    
-                    # Extract from instrument key
                     'instrument_key': instrument_key
                 }
                 
                 self.tick_data.append(tick)
-                
                 if len(self.tick_data) > self.max_ticks:
                     self.tick_data.pop(0)
                 
@@ -139,7 +121,7 @@ class NiftyOptionsTradingEngine:
             print(f"Error processing tick: {e}")
     
     def create_one_minute_bar(self):
-        """Create 1-minute bars from ticks."""
+        """Create 1-minute OHLC bars"""
         if len(self.tick_data) < 2:
             return
         
@@ -158,194 +140,144 @@ class NiftyOptionsTradingEngine:
                     'close': minute_ticks[-1]['ltp'],
                     'volume': sum(t['ltq'] for t in minute_ticks),
                     'avg_pressure': sum(t['order_book']['pressure_score'] for t in minute_ticks) / len(minute_ticks),
-                    
-                    # Options Greeks averages
                     'avg_delta': sum(t['delta'] for t in minute_ticks) / len(minute_ticks),
                     'avg_gamma': sum(t['gamma'] for t in minute_ticks) / len(minute_ticks),
                     'avg_theta': sum(t['theta'] for t in minute_ticks) / len(minute_ticks),
                     'avg_vega': sum(t['vega'] for t in minute_ticks) / len(minute_ticks),
                     'avg_iv': sum(t['iv'] for t in minute_ticks) / len(minute_ticks),
-                    
                     'oi': minute_ticks[-1]['oi'],
-                    'oi_change': 0  # Calculate later
+                    'oi_change': 0
                 }
                 
-                # Calculate OI change
                 if len(self.one_minute_bars) > 0:
                     prev_oi = self.one_minute_bars[-1]['oi']
                     bar['oi_change'] = ((bar['oi'] - prev_oi) / prev_oi * 100) if prev_oi > 0 else 0
                 
                 self.one_minute_bars.append(bar)
-                
                 if len(self.one_minute_bars) > self.max_bars:
                     self.one_minute_bars.pop(0)
     
     def is_market_hours(self):
-        """Check if current time is within market hours."""
+        """Check market hours"""
         now = datetime.now().time()
-        market_open = dt_time(9, 15)
-        market_close = dt_time(15, 30)
-        return market_open <= now <= market_close
+        return dt_time(9, 15) <= now <= dt_time(15, 30)
     
     def get_option_type(self, instrument_key):
-        """Extract option type from instrument key."""
+        """Extract CE/PE from instrument key"""
         if 'CE' in instrument_key:
             return 'CE'
         elif 'PE' in instrument_key:
             return 'PE'
         return None
     
-    def analyze_nifty_trend(self):
-        """
-        Analyze Nifty spot trend from recent bars.
-        Returns: 'BULLISH', 'BEARISH', 'NEUTRAL'
-        """
-        if len(self.one_minute_bars) < 20:
-            return 'NEUTRAL'
-        
-        recent_bars = self.one_minute_bars[-20:]
-        
-        # Simple trend: compare last 5 bars avg vs previous 15 bars avg
-        last_5_avg = sum(b['close'] for b in recent_bars[-5:]) / 5
-        prev_15_avg = sum(b['close'] for b in recent_bars[-20:-5]) / 15
-        
-        change_percent = ((last_5_avg - prev_15_avg) / prev_15_avg) * 100
-        
-        if change_percent > 0.3:
-            return 'BULLISH'
-        elif change_percent < -0.3:
-            return 'BEARISH'
-        else:
-            return 'NEUTRAL'
-    
     def get_options_buying_signal(self):
-        """
-        Main strategy for Nifty Options BUYING only.
-        Returns CE or PE buy signal based on multiple factors.
-        """
+        """Main options entry signal"""
         if len(self.one_minute_bars) < 50:
-            return {'action': 'WAIT', 'message': 'Collecting data...'}
+            return {'action': 'WAIT', 'message': 'Collecting data...', 'score': 0}
         
         if not self.is_market_hours():
-            return {'action': 'WAIT', 'message': 'Outside market hours'}
+            return {'action': 'WAIT', 'message': 'Outside market hours', 'score': 0}
         
         current_bar = self.one_minute_bars[-1]
         previous_bar = self.one_minute_bars[-2]
         current_tick = self.tick_data[-1]
         
-        # Get option type
         option_type = self.get_option_type(current_tick['instrument_key'])
         if not option_type:
-            return {'action': 'WAIT', 'message': 'Not an option instrument'}
-        
-        # ===== OPTIONS BUYING CRITERIA =====
+            return {'action': 'WAIT', 'message': 'Not an option', 'score': 0}
         
         score = 0
         reasons = []
+        signal_details = {}
         
-        # 1. ORDER BOOK PRESSURE (30 points)
+        # 1. Order Book Pressure (30 points)
         pressure = current_tick['order_book']['pressure_score']
+        signal_details['pressure'] = pressure
         if option_type == 'CE':
             if pressure > 50:
                 score += 30
-                reasons.append('Strong CE buying pressure')
+                reasons.append(f'✅ Strong CE buying (+{pressure:.1f})')
             elif pressure > 30:
                 score += 20
-                reasons.append('Moderate CE buying')
-        else:  # PE
+                reasons.append(f'✅ Moderate CE buying (+{pressure:.1f})')
+        else:
             if pressure > 50:
                 score += 30
-                reasons.append('Strong PE buying pressure')
+                reasons.append(f'✅ Strong PE buying (+{pressure:.1f})')
             elif pressure > 30:
                 score += 20
-                reasons.append('Moderate PE buying')
+                reasons.append(f'✅ Moderate PE buying (+{pressure:.1f})')
         
-        # 2. DELTA ANALYSIS (20 points)
-        # For buying: Look for increasing delta
+        # 2. Delta Analysis (20 points)
         if len(self.one_minute_bars) >= 5:
             delta_trend = current_bar['avg_delta'] - self.one_minute_bars[-5]['avg_delta']
+            signal_details['delta_trend'] = delta_trend
             
             if option_type == 'CE':
-                if delta_trend > 0.05:  # Delta increasing (getting ITM)
+                if delta_trend > 0.05:
                     score += 20
-                    reasons.append('Delta increasing (CE gaining value)')
+                    reasons.append(f'✅ Delta rising (+{delta_trend:.3f})')
                 elif delta_trend > 0.02:
                     score += 10
-            else:  # PE
-                if delta_trend < -0.05:  # Delta becoming more negative
+            else:
+                if delta_trend < -0.05:
                     score += 20
-                    reasons.append('Delta increasing (PE gaining value)')
+                    reasons.append(f'✅ Delta strengthening ({delta_trend:.3f})')
                 elif delta_trend < -0.02:
                     score += 10
         
-        # 3. GAMMA SPIKE (20 points)
-        # High gamma = price will move fast if direction confirmed
+        # 3. Gamma Spike (20 points)
         avg_gamma = sum(b['avg_gamma'] for b in self.one_minute_bars[-20:]) / 20
+        gamma_ratio = current_tick['gamma'] / avg_gamma if avg_gamma > 0 else 1
+        signal_details['gamma_ratio'] = gamma_ratio
+        
         if current_tick['gamma'] > avg_gamma * 1.5:
             score += 20
-            reasons.append('Gamma spike - explosive move potential')
+            reasons.append(f'✅ Gamma spike ({gamma_ratio:.2f}x)')
         elif current_tick['gamma'] > avg_gamma * 1.2:
             score += 10
-            reasons.append('Elevated gamma')
+            reasons.append(f'✅ Elevated gamma ({gamma_ratio:.2f}x)')
         
-        # 4. IMPLIED VOLATILITY (15 points)
-        # Buy when IV is not too high (avoid expensive options)
+        # 4. IV Check (15 points)
         avg_iv = sum(b['avg_iv'] for b in self.one_minute_bars[-30:]) / 30
-        iv_percentile = (current_tick['iv'] / avg_iv - 1) * 100
+        iv_percentile = (current_tick['iv'] / avg_iv - 1) * 100 if avg_iv > 0 else 0
+        signal_details['iv_percentile'] = iv_percentile
         
-        if -10 < iv_percentile < 10:  # IV near normal
+        if -10 < iv_percentile < 10:
             score += 15
-            reasons.append('IV at reasonable levels')
-        elif iv_percentile < -10:  # IV low
+            reasons.append(f'✅ IV normal ({iv_percentile:+.1f}%)')
+        elif iv_percentile < -10:
             score += 10
-            reasons.append('IV below average (cheaper options)')
+            reasons.append(f'✅ IV low ({iv_percentile:+.1f}%)')
         
-        # 5. OPEN INTEREST CHANGE (15 points)
-        # Increasing OI with price rise = fresh buying
+        # 5. OI Change (15 points)
         oi_change = current_bar['oi_change']
         price_change = ((current_bar['close'] - previous_bar['close']) / previous_bar['close']) * 100
+        signal_details['oi_change'] = oi_change
+        signal_details['price_change'] = price_change
         
-        if option_type == 'CE':
-            if oi_change > 5 and price_change > 0.5:
-                score += 15
-                reasons.append('Fresh CE long buildup')
-            elif oi_change > 2 and price_change > 0.2:
-                score += 8
-        else:  # PE
-            if oi_change > 5 and price_change > 0.5:
-                score += 15
-                reasons.append('Fresh PE long buildup')
-            elif oi_change > 2 and price_change > 0.2:
-                score += 8
+        if oi_change > 5 and price_change > 0.5:
+            score += 15
+            reasons.append(f'✅ Fresh buildup (OI +{oi_change:.1f}%)')
+        elif oi_change > 2 and price_change > 0.2:
+            score += 8
         
-        # 6. THETA CONSIDERATION (Penalty)
-        # High theta decay = avoid buying (time is against you)
+        # 6. Theta Penalty
         if abs(current_tick['theta']) > 20:
             score -= 10
-            reasons.append('⚠️ High theta decay')
+            reasons.append(f'⚠️ High theta decay ({current_tick["theta"]:.1f})')
         
-        # 7. SPREAD CHECK
-        # Wide spread = illiquid, avoid
-        if current_tick['order_book']['spread_percent'] > 5:
+        # 7. Spread Check
+        spread = current_tick['order_book']['spread_percent']
+        signal_details['spread'] = spread
+        if spread > 5:
             score -= 10
-            reasons.append('⚠️ Wide bid-ask spread')
-        
-        # 8. NIFTY TREND CONFIRMATION (Bonus)
-        nifty_trend = self.analyze_nifty_trend()
-        if option_type == 'CE' and nifty_trend == 'BULLISH':
-            score += 10
-            reasons.append('Nifty trend bullish (supports CE)')
-        elif option_type == 'PE' and nifty_trend == 'BEARISH':
-            score += 10
-            reasons.append('Nifty trend bearish (supports PE)')
-        
-        # ===== DECISION =====
+            reasons.append(f'⚠️ Wide spread ({spread:.2f}%)')
         
         confidence = min(abs(score), 100)
         
-        # Entry conditions
+        # Entry decision
         if score > 60 and confidence > 60:
-            # Calculate position size based on option price
             premium = current_bar['close']
             lots = self.calculate_lot_size(premium)
             
@@ -354,14 +286,13 @@ class NiftyOptionsTradingEngine:
                 'option_type': option_type,
                 'symbol': current_tick['instrument_key'],
                 'entry': premium,
-                'stop_loss': premium * (1 - self.max_loss_per_trade),  # 50% max loss
-                'target': premium * (1 + self.target_profit),  # 100% profit
+                'stop_loss': premium * (1 - self.max_loss_per_trade),
+                'target': premium * (1 + self.target_profit),
                 'quantity': lots,
                 'confidence': confidence,
                 'score': score,
                 'reasons': reasons,
-                
-                # Options specific data
+                'signal_details': signal_details,
                 'delta': current_tick['delta'],
                 'gamma': current_tick['gamma'],
                 'iv': current_tick['iv'],
@@ -373,28 +304,20 @@ class NiftyOptionsTradingEngine:
             'action': 'NO_SIGNAL',
             'score': score,
             'confidence': confidence,
-            'reasons': reasons
+            'reasons': reasons,
+            'signal_details': signal_details
         }
     
     def calculate_lot_size(self, premium):
-        """
-        Calculate lot size based on premium price.
-        Lower premium = more lots (but cap at max risk)
-        """
-        max_risk_per_trade = 10000  # ₹10,000 max risk per trade
-        
+        """Calculate position size"""
+        max_risk = 10000
         if premium > 0:
-            # Nifty lot size = 50
-            max_lots = int(max_risk_per_trade / (premium * 50))
-            return max(1, min(max_lots, 3))  # Min 1 lot, Max 3 lots
-        
+            max_lots = int(max_risk / (premium * 50))
+            return max(1, min(max_lots, 3))
         return 1
     
     def check_exit_conditions(self, position):
-        """
-        Check if position should be exited.
-        Options-specific exit conditions.
-        """
+        """Check exit conditions"""
         if not position or len(self.tick_data) == 0:
             return {'action': 'HOLD'}
         
@@ -402,10 +325,9 @@ class NiftyOptionsTradingEngine:
         current_price = current_tick['ltp']
         entry_price = position['entry']
         
-        # Calculate P&L percentage
         pnl_percent = ((current_price - entry_price) / entry_price) * 100
         
-        # EXIT 1: Stop Loss Hit (50% loss)
+        # Stop Loss
         if current_price <= position['stop_loss']:
             return {
                 'action': 'EXIT',
@@ -414,7 +336,7 @@ class NiftyOptionsTradingEngine:
                 'pnl_percent': pnl_percent
             }
         
-        # EXIT 2: Target Hit (100% profit)
+        # Target
         if current_price >= position['target']:
             return {
                 'action': 'EXIT',
@@ -423,17 +345,17 @@ class NiftyOptionsTradingEngine:
                 'pnl_percent': pnl_percent
             }
         
-        # EXIT 3: Delta reversal (option losing value)
+        # Delta Reversal
         if position['option_type'] == 'CE':
-            if current_tick['delta'] < position['delta'] * 0.7:  # Delta dropped 30%
+            if current_tick['delta'] < position['delta'] * 0.7:
                 return {
                     'action': 'EXIT',
                     'reason': 'DELTA_REVERSAL',
                     'exit_price': current_price,
                     'pnl_percent': pnl_percent
                 }
-        else:  # PE
-            if current_tick['delta'] > position['delta'] * 0.7:  # Delta weakening
+        else:
+            if current_tick['delta'] > position['delta'] * 0.7:
                 return {
                     'action': 'EXIT',
                     'reason': 'DELTA_REVERSAL',
@@ -441,7 +363,7 @@ class NiftyOptionsTradingEngine:
                     'pnl_percent': pnl_percent
                 }
         
-        # EXIT 4: Order book reversal
+        # Order Book Reversal
         pressure = current_tick['order_book']['pressure_score']
         if position['option_type'] == 'CE' and pressure < -40:
             return {
@@ -458,9 +380,8 @@ class NiftyOptionsTradingEngine:
                 'pnl_percent': pnl_percent
             }
         
-        # EXIT 5: End of day (3:15 PM - square off)
-        now = datetime.now().time()
-        if now >= dt_time(15, 15):
+        # EOD Square-off
+        if datetime.now().time() >= dt_time(15, 15):
             return {
                 'action': 'EXIT',
                 'reason': 'END_OF_DAY_SQUAREOFF',
@@ -468,7 +389,6 @@ class NiftyOptionsTradingEngine:
                 'pnl_percent': pnl_percent
             }
         
-        # Continue holding
         return {
             'action': 'HOLD',
             'current_price': current_price,
@@ -476,22 +396,19 @@ class NiftyOptionsTradingEngine:
         }
     
     def get_trading_decision(self):
-        """Main entry point for trading decision."""
-        # Check for exit if position exists
+        """Main trading decision"""
         if self.active_position:
             return self.check_exit_conditions(self.active_position)
-        
-        # Otherwise look for entry
         return self.get_options_buying_signal()
     
     def get_order_book_pressure(self):
-        """Get current order book pressure."""
+        """Get current pressure"""
         if self.tick_data:
             return self.tick_data[-1]['order_book']['pressure_score']
         return 0
     
     def get_current_greeks(self):
-        """Get current Greeks values."""
+        """Get current Greeks"""
         if self.tick_data:
             tick = self.tick_data[-1]
             return {
@@ -504,8 +421,6 @@ class NiftyOptionsTradingEngine:
         return {}
 
 
-print("✅ Nifty Options Buying Strategy Ready!")
-print("📊 Focus: CE/PE buying only")
-print("🎯 Entry: Score > 60, Confidence > 60%")
-print("🛑 Stop Loss: 50% of premium")
-print("💰 Target: 100% profit")
+print("✅ Nifty Options Engine Ready!")
+print("📊 Fixed: calc_imb function, Deep levels = 40% weight")
+print("🎯 Enhanced: Signal details for UI")
