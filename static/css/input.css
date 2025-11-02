@@ -1,0 +1,19 @@
+@import "tailwindcss";
+
+@theme {
+  --color-primary: oklch(0.6 0.2 200);
+  --color-secondary: oklch(0.7 0.15 280);
+}
+
+@layer base {
+  body {
+    font-family: 'Inter', system-ui, sans-serif;
+    background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+  }
+}
+
+@layer components {
+  .card {
+    @apply rounded-lg border border-white/10 bg-white/5 backdrop-blur-lg;
+  }
+}

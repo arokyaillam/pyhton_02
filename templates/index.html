@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Upstox Trading System</title>
+    <link href="/static/css/output.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body class="min-h-screen text-white">
+    <div class="container mx-auto px-6 py-8">
+        
+        <div class="flex justify-between items-center mb-8">
+            <div>
+                <h1 class="text-5xl font-bold mb-2 bg-gradient-to-r from-blue-400 to-purple-500 bg-clip-text text-transparent">
+                    🎯 Upstox Trading System
+                </h1>
+                <p class="text-gray-400">Flask 3.1.2 • Tailwind 4.1 • WebSockets 15.0.1</p>
+            </div>
+            
+            <div class="flex gap-4">
+                <button id="startBtn" onclick="startTrading()" 
+                    class="px-6 py-3 bg-green-600 hover:bg-green-700 rounded-lg font-semibold transition-all">
+                    ▶️ Start Trading
+                </button>
+                <button id="stopBtn" onclick="stopTrading()" 
+                    class="px-6 py-3 bg-red-600 hover:bg-red-700 rounded-lg font-semibold transition-all hidden">
+                    ⏸️ Stop Trading
+                </button>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+            <div class="rounded-lg border border-white/10 bg-white/5 backdrop-blur-lg p-6">
+                <h3 class="text-sm text-gray-300 mb-2">Total P&L</h3>
+                <p id="totalPnL" class="text-3xl font-bold text-green-400">0.00%</p>
+            </div>
+            
+            <div class="rounded-lg border border-white/10 bg-white/5 backdrop-blur-lg p-6">
+                <h3 class="text-sm text-gray-300 mb-2">Win Rate</h3>
+                <p id="winRate" class="text-3xl font-bold text-blue-400">0%</p>
+            </div>
+            
+            <div class="rounded-lg border border-white/10 bg-white/5 backdrop-blur-lg p-6">
+                <h3 class="text-sm text-gray-300 mb-2">Total Trades</h3>
+                <p id="totalTrades" class="text-3xl font-bold text-purple-400">0</p>
+            </div>
+            
+            <div class="rounded-lg border border-white/10 bg-white/5 backdrop-blur-lg p-6">
+                <h3 class="text-sm text-gray-300 mb-2">Status</h3>
+                <p id="systemStatus" class="text-3xl font-bold text-yellow-400">STOPPED</p>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+            <div class="rounded-lg border border-white/10 bg-white/5 backdrop-blur-lg p-6">
+                <h2 class="text-2xl font-bold mb-4">📊 Live Market Data</h2>
+                <div class="space-y-3">
+                    <div class="flex justify-between p-3 rounded-lg bg-white/5">
+                        <span class="text-gray-400">LTP:</span>
+                        <span id="ltp" class="font-semibold">-</span>
+                    </div>
+                    <div class="flex justify-between p-3 rounded-lg bg-white/5">
+                        <span class="text-gray-400">VWAP:</span>
+                        <span id="vwap" class="font-semibold">-</span>
+                    </div>
+                    <div class="flex justify-between p-3 rounded-lg bg-white/5">
+                        <span class="text-gray-400">Order Book Pressure:</span>
+                        <span id="pressure" class="font-semibold">-</span>
+                    </div>
+                    <div class="flex justify-between p-3 rounded-lg bg-white/5">
+                        <span class="text-gray-400">Gamma:</span>
+                        <span id="gamma" class="font-semibold">-</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="rounded-lg border border-white/10 bg-white/5 backdrop-blur-lg p-6">
+                <h2 class="text-2xl font-bold mb-4">🎯 Current Position</h2>
+                <div id="currentPosition">
+                    <p class="text-gray-400 text-center py-12">No active position</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="rounded-lg border border-white/10 bg-white/5 backdrop-blur-lg p-6">
+            <h2 class="text-2xl font-bold mb-4">📋 Trade History</h2>
+            <div class="overflow-x-auto">
+                <table class="w-full">
+                    <thead>
+                        <tr class="border-b border-white/10">
+                            <th class="text-left py-3 px-4 text-gray-300">Time</th>
+                            <th class="text-left py-3 px-4 text-gray-300">Type</th>
+                            <th class="text-left py-3 px-4 text-gray-300">Entry</th>
+                            <th class="text-left py-3 px-4 text-gray-300">Exit</th>
+                            <th class="text-left py-3 px-4 text-gray-300">P&L</th>
+                            <th class="text-left py-3 px-4 text-gray-300">Reason</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tradeHistory">
+                        <tr>
+                            <td colspan="6" class="text-center py-12 text-gray-400">
+                                No trades yet
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/js/app.js"></script>
+</body>
+</html>
