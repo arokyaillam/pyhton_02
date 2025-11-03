@@ -3,6 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Real-time trading system for Upstox with 30-level order book analysis">
     <title>Upstox Enhanced Trading System</title>
     <link href="/static/css/output.css" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -21,6 +22,7 @@
             top: -4px;
             box-shadow: 0 2px 4px rgba(0,0,0,0.3);
             border-radius: 2px;
+            transition: left 0.3s ease;
         }
         .pulse {
             animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
@@ -31,9 +33,19 @@
         }
         .glow-green {
             box-shadow: 0 0 20px rgba(34, 197, 94, 0.5);
+            animation: glow-green 2s ease-in-out infinite;
         }
         .glow-red {
             box-shadow: 0 0 20px rgba(239, 68, 68, 0.5);
+            animation: glow-red 2s ease-in-out infinite;
+        }
+        @keyframes glow-green {
+            0%, 100% { box-shadow: 0 0 20px rgba(34, 197, 94, 0.5); }
+            50% { box-shadow: 0 0 30px rgba(34, 197, 94, 0.8); }
+        }
+        @keyframes glow-red {
+            0%, 100% { box-shadow: 0 0 20px rgba(239, 68, 68, 0.5); }
+            50% { box-shadow: 0 0 30px rgba(239, 68, 68, 0.8); }
         }
     </style>
 </head>
@@ -164,7 +176,7 @@
                             <span id="top5Imb" class="font-semibold">-</span>
                         </div>
                         <div class="w-full bg-gray-700 rounded-full h-2">
-                            <div id="top5Bar" class="bg-gradient-to-r from-red-500 to-green-500 h-2 rounded-full" style="width: 50%"></div>
+                            <div id="top5Bar" class="bg-gradient-to-r from-red-500 to-green-500 h-2 rounded-full transition-all" style="width: 50%"></div>
                         </div>
                     </div>
                     
@@ -174,7 +186,7 @@
                             <span id="mid10Imb" class="font-semibold">-</span>
                         </div>
                         <div class="w-full bg-gray-700 rounded-full h-2">
-                            <div id="mid10Bar" class="bg-gradient-to-r from-red-500 to-green-500 h-2 rounded-full" style="width: 50%"></div>
+                            <div id="mid10Bar" class="bg-gradient-to-r from-red-500 to-green-500 h-2 rounded-full transition-all" style="width: 50%"></div>
                         </div>
                     </div>
                     
@@ -184,7 +196,7 @@
                             <span id="deep15Imb" class="font-semibold">-</span>
                         </div>
                         <div class="w-full bg-gray-700 rounded-full h-3">
-                            <div id="deep15Bar" class="bg-gradient-to-r from-red-500 to-green-500 h-3 rounded-full" style="width: 50%"></div>
+                            <div id="deep15Bar" class="bg-gradient-to-r from-red-500 to-green-500 h-3 rounded-full transition-all" style="width: 50%"></div>
                         </div>
                     </div>
                     
@@ -243,282 +255,7 @@
         </div>
     </div>
 
-    <script>
-        let eventSource = null;
-        let currentEngine = null;
-
-        function startFuturesTrading() {
-            fetch('/api/start-trading', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ instruments: ['NSE_FO|61755'] })
-            })
-            .then(res => res.json())
-            .then(data => {
-                if (data.status === 'success') {
-                    currentEngine = 'futures';
-                    updateButtons();
-                    document.getElementById('engineType').textContent = 'FUTURES';
-                    document.getElementById('engineType').className = 'text-2xl font-bold text-blue-400 pulse';
-                    connectSSE();
-                }
-            });
-        }
-
-        function startOptionsTrading() {
-            fetch('/api/start-options-trading', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ instruments: ['NSE_FO|NIFTY2550619900CE'] })
-            })
-            .then(res => res.json())
-            .then(data => {
-                if (data.status === 'success') {
-                    currentEngine = 'options';
-                    updateButtons();
-                    document.getElementById('engineType').textContent = 'OPTIONS';
-                    document.getElementById('engineType').className = 'text-2xl font-bold text-purple-400 pulse';
-                    connectSSE();
-                }
-            });
-        }
-
-        function stopTrading() {
-            fetch('/api/stop-trading', { method: 'POST' })
-            .then(res => res.json())
-            .then(data => {
-                if (data.status === 'success') {
-                    currentEngine = null;
-                    updateButtons();
-                    document.getElementById('engineType').textContent = 'STOPPED';
-                    document.getElementById('engineType').className = 'text-2xl font-bold text-gray-400';
-                    
-                    if (eventSource) {
-                        eventSource.close();
-                        eventSource = null;
-                    }
-                }
-            });
-        }
-
-        function updateButtons() {
-            const futuresBtn = document.getElementById('startFuturesBtn');
-            const optionsBtn = document.getElementById('startOptionsBtn');
-            const stopBtn = document.getElementById('stopBtn');
-            
-            if (currentEngine) {
-                futuresBtn.classList.add('hidden');
-                optionsBtn.classList.add('hidden');
-                stopBtn.classList.remove('hidden');
-            } else {
-                futuresBtn.classList.remove('hidden');
-                optionsBtn.classList.remove('hidden');
-                stopBtn.classList.add('hidden');
-            }
-        }
-
-        function connectSSE() {
-            eventSource = new EventSource('/stream');
-            
-            eventSource.onmessage = function(event) {
-                const data = JSON.parse(event.data);
-                
-                if (data.type === 'market_data') {
-                    updateLiveData(data.data);
-                } else if (data.type === 'trade') {
-                    handleNewTrade(data.data);
-                } else if (data.type === 'position_update') {
-                    updatePosition(data.data);
-                }
-            };
-            
-            loadStats();
-            loadTrades();
-            loadSignalDetails();
-            
-            // Refresh signal details every 2 seconds
-            setInterval(loadSignalDetails, 2000);
-        }
-
-        function updateLiveData(data) {
-            document.getElementById('ltp').textContent = '₹' + data.ltp.toFixed(2);
-            
-            if (data.vwap) {
-                document.getElementById('vwap').textContent = '₹' + data.vwap.toFixed(2);
-            }
-            
-            const pressure = document.getElementById('pressure');
-            pressure.textContent = data.pressure.toFixed(1);
-            pressure.className = data.pressure > 0 ? 
-                'font-semibold text-lg text-green-400' : 'font-semibold text-lg text-red-400';
-            
-            document.getElementById('delta').textContent = data.delta ? data.delta.toFixed(4) : '-';
-            document.getElementById('gamma').textContent = data.gamma ? data.gamma.toFixed(4) : '-';
-            document.getElementById('iv').textContent = data.iv ? (data.iv * 100).toFixed(2) + '%' : '-';
-        }
-
-        function loadSignalDetails() {
-            if (!currentEngine) return;
-            
-            fetch('/api/signal-details')
-            .then(res => res.json())
-            .then(data => {
-                if (!data.score) return;
-                
-                // Update signal score
-                document.getElementById('signalScore').textContent = data.score.toFixed(0);
-                document.getElementById('meterScore').textContent = data.score.toFixed(0);
-                document.getElementById('meterConfidence').textContent = data.confidence.toFixed(0) + '%';
-                document.getElementById('meterAction').textContent = data.action;
-                
-                // Update signal meter
-                const marker = document.getElementById('signalMarker');
-                const position = ((data.score + 100) / 200) * 100; // Convert -100 to +100 to 0% to 100%
-                marker.style.left = position + '%';
-                
-                // Update order book bars
-                if (data.order_book) {
-                    updateOrderBookBar('top5', data.order_book.top5_imb);
-                    updateOrderBookBar('mid10', data.order_book.mid10_imb);
-                    updateOrderBookBar('deep15', data.order_book.deep15_imb);
-                    
-                    document.getElementById('spread').textContent = 
-                        data.order_book.spread_percent.toFixed(2) + '%';
-                }
-                
-                // Update signal reasons
-                if (data.reasons && data.reasons.length > 0) {
-                    const reasonsDiv = document.getElementById('signalReasons');
-                    reasonsDiv.innerHTML = data.reasons.map(reason => {
-                        const isPositive = reason.includes('✅');
-                        const color = isPositive ? 'text-green-400' : 'text-yellow-400';
-                        return `<div class="p-2 rounded bg-white/5 ${color}">${reason}</div>`;
-                    }).join('');
-                }
-            });
-        }
-
-        function updateOrderBookBar(level, imbalance) {
-            const bar = document.getElementById(level + 'Bar');
-            const label = document.getElementById(level + 'Imb');
-            
-            const position = ((imbalance + 1) / 2) * 100; // Convert -1 to +1 to 0% to 100%
-            bar.style.width = position + '%';
-            
-            label.textContent = (imbalance >= 0 ? '+' : '') + imbalance.toFixed(3);
-            label.className = imbalance > 0 ? 'font-semibold text-green-400' : 
-                             imbalance < 0 ? 'font-semibold text-red-400' : 'font-semibold';
-        }
-
-        function handleNewTrade(trade) {
-            loadStats();
-            loadTrades();
-            
-            const engineType = trade.engine_type || 'trade';
-            alert(`New ${trade.type} ${engineType} at ₹${trade.entry.toFixed(2)}`);
-        }
-
-        function updatePosition(position) {
-            const div = document.getElementById('currentPosition');
-            const isLong = position.type === 'LONG' || position.option_type === 'CE';
-            const typeText = position.option_type ? 
-                `${position.option_type} (${position.type})` : position.type;
-            
-            div.innerHTML = `
-                <div class="grid grid-cols-2 lg:grid-cols-4 gap-6">
-                    <div class="p-4 rounded-lg ${isLong ? 'bg-green-900/30 glow-green' : 'bg-red-900/30 glow-red'}">
-                        <p class="text-sm text-gray-400 mb-1">Type</p>
-                        <p class="text-2xl font-bold ${isLong ? 'text-green-400' : 'text-red-400'}">
-                            ${typeText}
-                        </p>
-                    </div>
-                    
-                    <div class="p-4 rounded-lg bg-white/5">
-                        <p class="text-sm text-gray-400 mb-1">Entry</p>
-                        <p class="text-2xl font-bold">₹${position.entry.toFixed(2)}</p>
-                    </div>
-                    
-                    <div class="p-4 rounded-lg bg-white/5">
-                        <p class="text-sm text-gray-400 mb-1">Stop Loss</p>
-                        <p class="text-2xl font-bold text-red-400">₹${position.stopLoss.toFixed(2)}</p>
-                    </div>
-                    
-                    <div class="p-4 rounded-lg bg-white/5">
-                        <p class="text-sm text-gray-400 mb-1">Target</p>
-                        <p class="text-2xl font-bold text-green-400">₹${position.target.toFixed(2)}</p>
-                    </div>
-                </div>
-                
-                ${position.delta ? `
-                <div class="mt-4 grid grid-cols-4 gap-4 text-center">
-                    <div>
-                        <p class="text-xs text-gray-400">Delta</p>
-                        <p class="font-semibold">${position.delta.toFixed(3)}</p>
-                    </div>
-                    <div>
-                        <p class="text-xs text-gray-400">Gamma</p>
-                        <p class="font-semibold">${position.gamma.toFixed(4)}</p>
-                    </div>
-                    <div>
-                        <p class="text-xs text-gray-400">IV</p>
-                        <p class="font-semibold">${(position.iv * 100).toFixed(1)}%</p>
-                    </div>
-                    <div>
-                        <p class="text-xs text-gray-400">Confidence</p>
-                        <p class="font-semibold">${position.confidence}%</p>
-                    </div>
-                </div>
-                ` : ''}
-            `;
-        }
-
-        function loadStats() {
-            fetch('/api/stats')
-            .then(res => res.json())
-            .then(data => {
-                const pnlEl = document.getElementById('totalPnL');
-                pnlEl.textContent = data.total_pnl.toFixed(2) + '%';
-                pnlEl.className = 'text-3xl font-bold ' + 
-                    (data.total_pnl >= 0 ? 'text-green-400' : 'text-red-400');
-                
-                document.getElementById('winRate').textContent = data.win_rate.toFixed(1) + '%';
-                document.getElementById('totalTrades').textContent = data.total_trades;
-            });
-        }
-
-        function loadTrades() {
-            fetch('/api/trades?limit=10')
-            .then(res => res.json())
-            .then(trades => {
-                const tbody = document.getElementById('tradeHistory');
-                
-                if (trades.length === 0) {
-                    tbody.innerHTML = '<tr><td colspan="8" class="text-center py-12 text-gray-400">No trades yet</td></tr>';
-                    return;
-                }
-                
-                tbody.innerHTML = trades.map(trade => `
-                    <tr class="border-b border-white/10 hover:bg-white/5">
-                        <td class="py-3 px-4 text-sm">${new Date(trade.entry_time).toLocaleTimeString()}</td>
-                        <td class="py-3 px-4">
-                            <span class="px-2 py-1 rounded text-sm ${trade.trade_type === 'LONG' ? 'bg-green-600' : 'bg-red-600'}">
-                                ${trade.trade_type}
-                            </span>
-                        </td>
-                        <td class="py-3 px-4 font-semibold">₹${trade.entry_price.toFixed(2)}</td>
-                        <td class="py-3 px-4">${trade.exit_price ? '₹' + trade.exit_price.toFixed(2) : '-'}</td>
-                        <td class="py-3 px-4 text-red-400 text-sm">₹${trade.stop_loss.toFixed(2)}</td>
-                        <td class="py-3 px-4 text-green-400 text-sm">₹${trade.target.toFixed(2)}</td>
-                        <td class="py-3 px-4">
-                            <span class="${trade.pnl_percent >= 0 ? 'text-green-400' : 'text-red-400'} font-semibold">
-                                ${trade.pnl_percent ? (trade.pnl_percent >= 0 ? '+' : '') + trade.pnl_percent.toFixed(2) + '%' : '-'}
-                            </span>
-                        </td>
-                        <td class="py-3 px-4 text-sm text-gray-400">${trade.exit_reason || '-'}</td>
-                    </tr>
-                `).join('');
-            });
-        }
-    </script>
+    <!-- FIXED: Only load external JavaScript, NO inline code -->
+    <script src="/static/js/app.js"></script>
 </body>
 </html>
